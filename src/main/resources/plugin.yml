@@ -1,0 +1,4 @@
+name: ChatIntegration
+version: '${project.version}'
+main: com.garfield.chatintegration.ChatIntegration
+api-version: '1.21'
