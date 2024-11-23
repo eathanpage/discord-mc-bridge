@@ -30,14 +30,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.HashMap;
 
-public class DiscordBot extends ListenerAdapter {
+public class DiscordListener extends ListenerAdapter {
     public JDA jda;
     private final TextChannel textChannel;
     private final WebhookClient webhookClient;
     private final ChatIntegration plugin;
     private final JsonObject playersMap;
 
-    public DiscordBot(ChatIntegration plugin) {
+    public DiscordListener(ChatIntegration plugin) {
         this.plugin = plugin;
         this.jda = setupJDA();
         this.textChannel = setupTextChannel();
@@ -45,22 +45,31 @@ public class DiscordBot extends ListenerAdapter {
         this.playersMap = loadPlayersMap();
     }
 
+
+
     private JDA setupJDA() {
         try {
             JDA jda = JDABuilder.createDefault(plugin.getConfig().getString("token"),
                             GatewayIntent.GUILD_MESSAGES,
-                            GatewayIntent.MESSAGE_CONTENT)
+                            GatewayIntent.MESSAGE_CONTENT,
+                            GatewayIntent.GUILD_MEMBERS)
                     .enableCache(CacheFlag.MEMBER_OVERRIDES)
+                    .disableCache(
+                            CacheFlag.VOICE_STATE,
+                            CacheFlag.EMOJI,
+                            CacheFlag.STICKER,
+                            CacheFlag.SCHEDULED_EVENTS
+                    )
                     .addEventListeners(this)
                     .build();
-
             jda.awaitReady();
             return jda;
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            plugin.getLogger().severe("JDA setup failed: " + e.getMessage());
             return null;
         }
     }
+
 
     private TextChannel setupTextChannel() {
         Guild guild = jda.getGuildById(plugin.getConfig().getString("guildId"));
@@ -92,7 +101,6 @@ public class DiscordBot extends ListenerAdapter {
             plugin.getLogger().warning("discord.json file not found!");
             return new JsonObject();
         }
-
         try (FileReader reader = new FileReader(playersFile)) {
             return JsonParser.parseReader(reader).getAsJsonObject();
         } catch (IOException e) {
@@ -190,16 +198,32 @@ public class DiscordBot extends ListenerAdapter {
         return member.getEffectiveName();
     }
 
-    public String getSelfAvatarUrl(){
-        return jda.getSelfUser().getAvatarUrl();
+    public Member getDiscordMemberFromUUID(String playerId) {
+        if (playersMap.has(playerId)) {
+            String discordId = playersMap.get(playerId).getAsString();
+            try {
+                User user = jda.retrieveUserById(discordId).complete();
+                Guild guild = jda.getGuildById(Objects.requireNonNull(plugin.getConfig().getString("guildId")));
+                return (guild != null) ? guild.retrieveMember(user).complete() : null;
+            } catch (Exception e) {
+                plugin.getLogger().warning("Failed to fetch Discord member for UUID: " + playerId + ". Error: " + e.getMessage());
+            }
+        }
+        return null;
     }
 
-    public Member getDiscordMemberFromUUID(String playerId) {
-        String discordId = playersMap.get(playerId).getAsString();
-        User user = jda.retrieveUserById(discordId).complete();
-        Guild guild = jda.getGuildById(Objects.requireNonNull(plugin.getConfig().getString("guildId")));
-        return guild != null ? guild.retrieveMember(user).complete() : null;
+    public String getAvatarUrl(Member user) {
+        if (user != null) {
+            String avatarId = user.getUser().getAvatarId();
+            if (avatarId != null) {
+                return String.format("https://cdn.discordapp.com/avatars/%s/%s.png", user.getId(), avatarId);
+            } else {
+                return user.getDefaultAvatarUrl();
+            }
+        }
+        return null;
     }
+
 
     private String fetchMinecraftNameFromCache(String uuid) {
         Map<String, String> userCache = loadUserCache();
@@ -219,9 +243,10 @@ public class DiscordBot extends ListenerAdapter {
         }
     }
 
-    public void shutdown() {
+    public synchronized void shutdown() {
         if (jda != null) {
             jda.shutdown();
+            jda = null;
         }
 
         if (webhookClient != null) {

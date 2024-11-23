@@ -3,21 +3,21 @@ package com.garfield.chatintegration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class ChatIntegration extends JavaPlugin {
-    private DiscordBot discordBot;
+    private DiscordListener discordListener;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        this.discordBot = new DiscordBot(this);
-        getServer().getPluginManager().registerEvents(new ChatListener(this.discordBot), this);
+        this.discordListener = new DiscordListener(this);
+        getServer().getPluginManager().registerEvents(new ChatListener(this.discordListener), this);
+        discordListener.sendMessageToWebhook("Server is starting", "System", discordListener.jda.getSelfUser().getAvatarUrl());
     }
 
     @Override
     public void onDisable() {
-        if (discordBot != null) {
-            discordBot.sendMessageToWebhook("Server is restarting", "System", discordBot.jda.getSelfUser().getAvatarUrl());
-            discordBot.shutdown();
-
+        if (discordListener != null) {
+            discordListener.sendMessageToWebhook("Server is stopping", "System", discordListener.jda.getSelfUser().getAvatarUrl());
+            discordListener.shutdown();
         }
     }
 }
