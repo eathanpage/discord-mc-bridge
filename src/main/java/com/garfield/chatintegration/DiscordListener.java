@@ -136,11 +136,11 @@ public class DiscordListener extends ListenerAdapter {
 
     @Override
     public void onMessageReceived(MessageReceivedEvent event) {
-        if (!event.isFromGuild() || !event.getGuild().getId().equals("829090277217927178")) {
+        if (!event.isFromGuild() || !event.getGuild().getId().equals(plugin.getConfig().getString("guildId"))) {
             return; // Ignore messages not from the specified guild
         }
 
-        if (!event.getChannel().getId().equals("1260568739141648495")) {
+        if (!event.getChannel().getId().equals(plugin.getConfig().getString("channelId"))) {
             return; // Ignore messages not from the specified channel
         }
 
@@ -210,6 +210,12 @@ public class DiscordListener extends ListenerAdapter {
             }
         }
         return null;
+    }
+
+    public String getDiscordIdFromUUID(String playerId) {
+        if (playersMap.has(playerId)) {
+            return playersMap.get(playerId).getAsString();
+        } else return null;
     }
 
     public String getAvatarUrl(Member user) {

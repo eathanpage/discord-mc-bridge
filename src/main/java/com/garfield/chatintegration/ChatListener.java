@@ -3,7 +3,11 @@ package com.garfield.chatintegration;
 import io.papermc.paper.advancement.AdvancementDisplay;
 import net.dv8tion.jda.api.entities.Member;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.TranslatableComponent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.event.HoverEvent.ShowEntity;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.advancement.Advancement;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -14,10 +18,11 @@ import org.bukkit.event.player.PlayerAdvancementDoneEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.json.JSONObject;
+
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Scanner;
-
 
 public class ChatListener implements Listener {
     private final DiscordListener discordListener;
@@ -104,7 +109,6 @@ public class ChatListener implements Listener {
                     ? translations.getString(descriptionKey)
                     : display.description().toString();
 
-            // Check for linked Discord account
             Member member = discordListener.getDiscordMemberFromUUID(player.getUniqueId().toString());
             String senderName = (member != null) ? member.getEffectiveName() : player.getName();
 
@@ -121,9 +125,82 @@ public class ChatListener implements Listener {
 
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
-        String deathMessage = event.getDeathMessage();
-        assert deathMessage != null;
-        String trimmedMessage = deathMessage.replaceAll("§[0-9a-fA-FklmnoK-LOrR]", "");;
+        Component deathMessage = event.deathMessage();
+        if (deathMessage == null) {
+            return; // Skip if there's no death message
+        }
+
+        // Handle TranslatableComponent
+        String plainTextDeathMessage;
+        if (deathMessage instanceof TranslatableComponent) {
+            TranslatableComponent translatable = (TranslatableComponent) deathMessage;
+
+            // Extract the translation key
+            String key = translatable.key();
+
+            // Resolve the translation key using your translations JSON
+            String translation = translations.optString(key, key); // Fallback to the key if translation is missing
+
+            // Extract arguments from the TranslatableComponent
+            List<Component> args = translatable.args();
+
+            // Replace placeholders with arguments, and replace player names with Discord mentions
+            plainTextDeathMessage = replacePlaceholdersWithMentions(translation, args);
+        } else {
+            // Convert the Component to a plain string
+            plainTextDeathMessage = PlainTextComponentSerializer.plainText().serialize(deathMessage);
+        }
+
+        // Remove Minecraft formatting codes (e.g., §a, §l, etc.)
+        String trimmedMessage = plainTextDeathMessage.replaceAll("§[0-9a-fA-FklmnoK-LOrR]", "");
+
+        // Send the cleaned-up message to Discord
         sendSystemMessage(trimmedMessage);
+    }
+
+    private String replacePlaceholdersWithMentions(String translation, List<Component> args) {
+        String result = translation;
+
+        for (int i = 0; i < args.size(); i++) {
+            Component arg = args.get(i);
+
+            // Extract the player name and UUID from the Component
+            String playerName = extractPlayerName(arg);
+            String uuid = extractUUID(arg);
+
+            // If the argument is a player, replace it with a Discord mention
+            if (uuid != null) {
+                String discordId = discordListener.getDiscordIdFromUUID(uuid);
+                if (discordId != null) {
+                    result = result.replace("%" + (i + 1) + "$s", "<@" + discordId + ">");
+                    continue; // Skip to the next argument
+                }
+            }
+
+            // If the argument is not a player, convert it to plain text
+            String argText = PlainTextComponentSerializer.plainText().serialize(arg);
+            result = result.replace("%" + (i + 1) + "$s", argText);
+        }
+
+        return result;
+    }
+
+    private String extractPlayerName(Component component) {
+        if (component instanceof TextComponent) {
+            return ((TextComponent) component).content();
+        }
+        return null;
+    }
+
+    private String extractUUID(Component component) {
+        if (component instanceof TextComponent) {
+            // Check if the component has a hover event with a UUID
+            HoverEvent<?> hoverEvent = component.style().hoverEvent();
+            if (hoverEvent != null && hoverEvent.action() == HoverEvent.Action.SHOW_ENTITY) {
+                ShowEntity showEntity = (ShowEntity) hoverEvent.value();
+                return showEntity.id().toString(); // Extract the UUID
+            }
+        }
+        return null;
     }
 }
