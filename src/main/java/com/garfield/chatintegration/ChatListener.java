@@ -1,13 +1,16 @@
 package com.garfield.chatintegration;
 
 import io.papermc.paper.advancement.AdvancementDisplay;
+import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.TranslatableComponent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.event.HoverEvent.ShowEntity;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.Bukkit;
 import org.bukkit.advancement.Advancement;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -17,11 +20,12 @@ import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerAdvancementDoneEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.World;
 import org.json.JSONObject;
-
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Objects;
 import java.util.Scanner;
 
 public class ChatListener implements Listener {
@@ -67,7 +71,50 @@ public class ChatListener implements Listener {
         String senderName = (member != null) ? member.getEffectiveName() : player.getName();
         String avatarUrl = (member != null) ? discordListener.getAvatarUrl(member) : String.format("https://mc-heads.net/avatar/%s", player.getUniqueId());
 
-        discordListener.sendMessageToWebhook(message, senderName, avatarUrl);
+        if (message.startsWith("xaero-waypoint:")) {
+            String[] parts = message.split(":");
+            if (parts.length >= 10) {
+                String waypointName = parts[1];
+                if (parts[9].contains("overworld")) {
+                    parts[9] = "Overworld";
+                } else if (parts[9].contains("nether")) {
+                    parts[9] = "Nether";
+                } else if (parts[9].contains("end")) {
+                    parts[9] = "End";
+                }
+
+                String seed = String.valueOf(Objects.requireNonNull(Bukkit.getWorld("world")).getSeed());
+                String dimension = parts[9];
+                String x = parts[3];
+                String y = parts[4];
+                String z = parts[5];
+
+                String chunkbaseUrl = String.format(
+                        "https://www.chunkbase.com/apps/seed-map#seed=%s&platform=java_1_21_4&dimension=%s&x=%s&z=%s&pinX=%s&pinZ=%s&zoom=0.5",
+                        seed, dimension, x, z, x, z
+                );
+
+                // Create an embed message
+                EmbedBuilder embedBuilder = new EmbedBuilder();
+                embedBuilder.setTitle("Waypoint");
+                embedBuilder.setDescription("**" + waypointName + "**");
+                embedBuilder.addField("Dimension", dimension, false);
+                embedBuilder.addField("Seed Map", "[Click Here!](" + chunkbaseUrl + ")", true);
+                embedBuilder.addField("Co-ordinates", "**x**: " + x + ", **y**: " + y + ", **z**: " + z, false);
+                embedBuilder.setFooter(message);
+
+                MessageEmbed embed = embedBuilder.build();
+
+                // Send the embed message to the Discord webhook
+                discordListener.sendMessageToWebhook(embed, senderName, avatarUrl);
+            } else {
+                // Handle the case where the message format is incorrect
+                discordListener.sendMessageToWebhook("Invalid waypoint format", senderName, avatarUrl);
+            }
+        } else {
+            // Send the regular message to the Discord webhook
+            discordListener.sendMessageToWebhook(message, senderName, avatarUrl);
+        }
     }
 
     @EventHandler

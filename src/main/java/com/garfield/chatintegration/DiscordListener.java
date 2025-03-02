@@ -1,17 +1,16 @@
 package com.garfield.chatintegration;
 import club.minnced.discord.webhook.WebhookClient;
 import club.minnced.discord.webhook.send.AllowedMentions;
+import club.minnced.discord.webhook.send.WebhookEmbed;
+import club.minnced.discord.webhook.send.WebhookEmbedBuilder;
 import club.minnced.discord.webhook.send.WebhookMessageBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
-import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.entities.Member;
-import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.*;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
-import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.exceptions.ErrorResponseException;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.requests.GatewayIntent;
@@ -25,10 +24,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.HashMap;
+import java.util.*;
 
 public class DiscordListener extends ListenerAdapter {
     public JDA jda;
@@ -236,18 +232,33 @@ public class DiscordListener extends ListenerAdapter {
         return userCache.get(uuid);
     }
 
-    public void sendMessageToWebhook(String message, String username, String avatarUrl) {
+    public void sendMessageToWebhook(Object message, String username, String avatarUrl) {
         if (webhookClient != null) {
-
             WebhookMessageBuilder builder = new WebhookMessageBuilder()
                     .setAllowedMentions(AllowedMentions.none())
                     .setUsername(username)
-                    .setAvatarUrl(avatarUrl)
-                    .setContent(message);
+                    .setAvatarUrl(avatarUrl);
+
+            if (message instanceof String) {
+                builder.setContent((String) message);
+            } else if (message instanceof MessageEmbed) {
+                MessageEmbed jdaEmbed = (MessageEmbed) message;
+                WebhookEmbedBuilder embedBuilder = new WebhookEmbedBuilder()
+                        .setTitle(new WebhookEmbed.EmbedTitle(jdaEmbed.getTitle(), null))
+                        .setDescription(jdaEmbed.getDescription())
+                        .setFooter(new WebhookEmbed.EmbedFooter(jdaEmbed.getFooter().getText(), null));
+
+                jdaEmbed.getFields().forEach(field ->
+                        embedBuilder.addField(new WebhookEmbed.EmbedField(false, field.getName(), field.getValue()))
+                );
+
+                builder.addEmbeds(embedBuilder.build());
+            }
 
             webhookClient.send(builder.build());
         }
     }
+
 
     public synchronized void shutdown() {
         if (jda != null) {
