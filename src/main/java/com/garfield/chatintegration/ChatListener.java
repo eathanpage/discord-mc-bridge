@@ -149,24 +149,22 @@ public class ChatListener implements Listener {
             String titleKey = getTranslationKey(display.title());
             String descriptionKey = getTranslationKey(display.description());
 
-            String translatedTitle = (titleKey != null && translations.has(titleKey))
-                    ? translations.getString(titleKey)
-                    : display.title().toString();
-            String translatedDescription = (descriptionKey != null && translations.has(descriptionKey))
-                    ? translations.getString(descriptionKey)
-                    : display.description().toString();
+            if (titleKey != null && translations.has(titleKey) && descriptionKey != null && translations.has(descriptionKey)) {
+                String translatedTitle = translations.getString(titleKey);
+                String translatedDescription = translations.getString(descriptionKey);
 
-            Member member = discordListener.getDiscordMemberFromUUID(player.getUniqueId().toString());
-            String senderName = (member != null) ? member.getEffectiveName() : player.getName();
+                String discordId = discordListener.getDiscordIdFromUUID(player.getUniqueId().toString());
+                String senderName = (discordId != null) ? "<@" + discordId + ">" : player.getName();
 
-            String advancementMessage = String.format(
-                    "%s has made the advancement [**%s**]\n-# Description: %s",
-                    senderName,
-                    translatedTitle,
-                    translatedDescription
-            );
+                String advancementMessage = String.format(
+                        "%s has made the advancement [**%s**]\n-# Description: %s",
+                        senderName,
+                        translatedTitle,
+                        translatedDescription
+                );
 
-            sendSystemMessage(advancementMessage);
+                sendSystemMessage(advancementMessage);
+            }
         }
     }
 
