@@ -16,24 +16,26 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
+import io.papermc.paper.event.player.AsyncChatEvent;
 import org.bukkit.event.player.PlayerAdvancementDoneEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.World;
 import org.json.JSONObject;
+
+import java.awt.*;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.*;
 import java.util.List;
-import java.util.Objects;
-import java.util.Scanner;
 
 public class ChatListener implements Listener {
     private final DiscordListener discordListener;
     private final JSONObject translations;
+    private final Map<String, Color> colours;
 
     public ChatListener(DiscordListener discordListener) {
         this.discordListener = discordListener;
+        this.colours = loadColours();
         this.translations = loadTranslations();
     }
 
@@ -41,12 +43,33 @@ public class ChatListener implements Listener {
         discordListener.sendMessageToWebhook(message, "System", discordListener.jda.getSelfUser().getAvatarUrl());
     }
 
+    private Map<String, Color> loadColours() {
+        Map<String, Color> colourMap = new HashMap<>();
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("colours.json")) {
+            if (is == null) {
+                throw new RuntimeException("Cannot find colours.json resource");
+            }
+            Scanner scanner = new Scanner(is, StandardCharsets.UTF_8);
+            String jsonText = scanner.useDelimiter("\\A").next();
+            JSONObject jsonObject = new JSONObject(jsonText);
+
+            for (String key : jsonObject.keySet()) {
+                String hex = jsonObject.getString(key);
+                Color color = Color.decode(hex);
+                colourMap.put(key, color);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return colourMap;
+    }
+
     private JSONObject loadTranslations() {
         try (InputStream is = getClass().getClassLoader().getResourceAsStream("en_us.json")) {
             if (is == null) {
                 throw new RuntimeException("Cannot find en_us.json resource");
             }
-            Scanner scanner = new Scanner(is, StandardCharsets.UTF_8.name());
+            Scanner scanner = new Scanner(is, StandardCharsets.UTF_8);
             String jsonText = scanner.useDelimiter("\\A").next();
             return new JSONObject(jsonText);
         } catch (Exception e) {
@@ -63,14 +86,12 @@ public class ChatListener implements Listener {
     }
 
     @EventHandler
-    public void onPlayerChat(AsyncPlayerChatEvent event) {
+    public void onPlayerChat(AsyncChatEvent event) {
         Player player = event.getPlayer();
-        String message = event.getMessage();
+        String message = PlainTextComponentSerializer.plainText().serialize(event.message());
         Member member = discordListener.getDiscordMemberFromUUID(player.getUniqueId().toString());
-
         String senderName = (member != null) ? member.getEffectiveName() : player.getName();
         String avatarUrl = (member != null) ? discordListener.getAvatarUrl(member) : String.format("https://mc-heads.net/avatar/%s", player.getUniqueId());
-
         if (message.startsWith("xaero-waypoint:")) {
             String[] parts = message.split(":");
             if (parts.length >= 10) {
@@ -82,37 +103,27 @@ public class ChatListener implements Listener {
                 } else if (parts[9].contains("end")) {
                     parts[9] = "End";
                 }
-
                 String seed = String.valueOf(Objects.requireNonNull(Bukkit.getWorld("world")).getSeed());
                 String dimension = parts[9];
                 String x = parts[3];
                 String y = parts[4];
                 String z = parts[5];
-
-                String chunkbaseUrl = String.format(
-                        "https://www.chunkbase.com/apps/seed-map#seed=%s&platform=java_1_21_4&dimension=%s&x=%s&z=%s&pinX=%s&pinZ=%s&zoom=0.5",
-                        seed, dimension, x, z, x, z
-                );
-
-                // Create an embed message
+                String colour = parts[6];
+                String chunkbaseUrl = String.format("https://www.chunkbase.com/apps/seed-map#seed=%s&platform=java_1_21_4&dimension=%s&x=%s&z=%s&pinX=%s&pinZ=%s&zoom=0.5", seed, dimension, x, z, x, z);
                 EmbedBuilder embedBuilder = new EmbedBuilder();
                 embedBuilder.setTitle("Waypoint");
                 embedBuilder.setDescription("**" + waypointName + "**");
                 embedBuilder.addField("Dimension", dimension, false);
                 embedBuilder.addField("Seed Map", "[Click Here!](" + chunkbaseUrl + ")", true);
                 embedBuilder.addField("Co-ordinates", "**x**: " + x + ", **y**: " + y + ", **z**: " + z, false);
+                embedBuilder.setColor(colours.getOrDefault(colour, Color.RED));
                 embedBuilder.setFooter(message);
-
                 MessageEmbed embed = embedBuilder.build();
-
-                // Send the embed message to the Discord webhook
                 discordListener.sendMessageToWebhook(embed, senderName, avatarUrl);
             } else {
-                // Handle the case where the message format is incorrect
                 discordListener.sendMessageToWebhook("Invalid waypoint format", senderName, avatarUrl);
             }
         } else {
-            // Send the regular message to the Discord webhook
             discordListener.sendMessageToWebhook(message, senderName, avatarUrl);
         }
     }
@@ -121,11 +132,7 @@ public class ChatListener implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         Member member = discordListener.getDiscordMemberFromUUID(player.getUniqueId().toString());
-
-        String joinMessage = (member != null)
-                ? "<@" + member.getId() + "> has joined the game"
-                : player.getName() + " has joined the game";
-
+        String joinMessage = (member != null) ? "<@" + member.getId() + "> has joined the game" : player.getName() + " has joined the game";
         sendSystemMessage(joinMessage);
     }
 
@@ -133,9 +140,7 @@ public class ChatListener implements Listener {
     public void onPlayerLeave(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         Member member = discordListener.getDiscordMemberFromUUID(player.getUniqueId().toString());
-        String leaveMessage = (member != null)
-                ? "<@" + member.getId() + "> has left the game"
-                : player.getName() + " has left the game";
+        String leaveMessage = (member != null) ? "<@" + member.getId() + "> has left the game" : player.getName() + " has left the game";
         sendSystemMessage(leaveMessage);
     }
 
@@ -156,12 +161,7 @@ public class ChatListener implements Listener {
                 String discordId = discordListener.getDiscordIdFromUUID(player.getUniqueId().toString());
                 String senderName = (discordId != null) ? "<@" + discordId + ">" : player.getName();
 
-                String advancementMessage = String.format(
-                        "%s has made the advancement [**%s**]\n-# Description: %s",
-                        senderName,
-                        translatedTitle,
-                        translatedDescription
-                );
+                String advancementMessage = String.format("%s has made the advancement [**%s**]\n-# Description: %s", senderName, translatedTitle, translatedDescription);
 
                 sendSystemMessage(advancementMessage);
             }
@@ -172,34 +172,19 @@ public class ChatListener implements Listener {
     public void onPlayerDeath(PlayerDeathEvent event) {
         Component deathMessage = event.deathMessage();
         if (deathMessage == null) {
-            return; // Skip if there's no death message
+            return;
         }
 
-        // Handle TranslatableComponent
         String plainTextDeathMessage;
-        if (deathMessage instanceof TranslatableComponent) {
-            TranslatableComponent translatable = (TranslatableComponent) deathMessage;
-
-            // Extract the translation key
+        if (deathMessage instanceof TranslatableComponent translatable) {
             String key = translatable.key();
-
-            // Resolve the translation key using your translations JSON
-            String translation = translations.optString(key, key); // Fallback to the key if translation is missing
-
-            // Extract arguments from the TranslatableComponent
+            String translation = translations.optString(key, key);
             List<Component> args = translatable.args();
-
-            // Replace placeholders with arguments, and replace player names with Discord mentions
             plainTextDeathMessage = replacePlaceholdersWithMentions(translation, args);
         } else {
-            // Convert the Component to a plain string
             plainTextDeathMessage = PlainTextComponentSerializer.plainText().serialize(deathMessage);
         }
-
-        // Remove Minecraft formatting codes (e.g., §a, §l, etc.)
         String trimmedMessage = plainTextDeathMessage.replaceAll("§[0-9a-fA-FklmnoK-LOrR]", "");
-
-        // Send the cleaned-up message to Discord
         sendSystemMessage(trimmedMessage);
     }
 
@@ -208,21 +193,14 @@ public class ChatListener implements Listener {
 
         for (int i = 0; i < args.size(); i++) {
             Component arg = args.get(i);
-
-            // Extract the player name and UUID from the Component
-            String playerName = extractPlayerName(arg);
             String uuid = extractUUID(arg);
-
-            // If the argument is a player, replace it with a Discord mention
             if (uuid != null) {
                 String discordId = discordListener.getDiscordIdFromUUID(uuid);
                 if (discordId != null) {
                     result = result.replace("%" + (i + 1) + "$s", "<@" + discordId + ">");
-                    continue; // Skip to the next argument
+                    continue;
                 }
             }
-
-            // If the argument is not a player, convert it to plain text
             String argText = PlainTextComponentSerializer.plainText().serialize(arg);
             result = result.replace("%" + (i + 1) + "$s", argText);
         }
@@ -230,20 +208,12 @@ public class ChatListener implements Listener {
         return result;
     }
 
-    private String extractPlayerName(Component component) {
-        if (component instanceof TextComponent) {
-            return ((TextComponent) component).content();
-        }
-        return null;
-    }
-
     private String extractUUID(Component component) {
         if (component instanceof TextComponent) {
-            // Check if the component has a hover event with a UUID
             HoverEvent<?> hoverEvent = component.style().hoverEvent();
             if (hoverEvent != null && hoverEvent.action() == HoverEvent.Action.SHOW_ENTITY) {
                 ShowEntity showEntity = (ShowEntity) hoverEvent.value();
-                return showEntity.id().toString(); // Extract the UUID
+                return showEntity.id().toString();
             }
         }
         return null;

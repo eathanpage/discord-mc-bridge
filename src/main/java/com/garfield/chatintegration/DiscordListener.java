@@ -76,13 +76,13 @@ public class DiscordListener extends ListenerAdapter {
     }
 
     private WebhookClient setupWebhookClient() {
-        TextChannel channel = textChannel; // Replace with your TextChannel instance
+        TextChannel channel = textChannel;
         List<net.dv8tion.jda.api.entities.Webhook> webhooks = channel.retrieveWebhooks().complete();
         if (!webhooks.isEmpty()) {
-            return WebhookClient.withUrl(webhooks.get(0).getUrl()); // Use the first webhook found (you might want to handle multiple webhooks)
+            return WebhookClient.withUrl(webhooks.getFirst().getUrl());
         } else {
             try {
-                net.dv8tion.jda.api.entities.Webhook webhook = channel.createWebhook("Your Webhook Name").complete(); // Create a webhook if none exist
+                net.dv8tion.jda.api.entities.Webhook webhook = channel.createWebhook("Minecraft Server Integration").complete();
                 return WebhookClient.withUrl(webhook.getUrl());
             } catch (ErrorResponseException e) {
                 e.printStackTrace();
@@ -133,11 +133,11 @@ public class DiscordListener extends ListenerAdapter {
     @Override
     public void onMessageReceived(MessageReceivedEvent event) {
         if (!event.isFromGuild() || !event.getGuild().getId().equals(plugin.getConfig().getString("guildId"))) {
-            return; // Ignore messages not from the specified guild
+            return;
         }
 
         if (!event.getChannel().getId().equals(plugin.getConfig().getString("channelId"))) {
-            return; // Ignore messages not from the specified channel
+            return;
         }
 
         if(event.getAuthor().isBot()) {
@@ -159,7 +159,6 @@ public class DiscordListener extends ListenerAdapter {
             String messageContent = event.getMessage().getContentDisplay();
             Component message;
 
-            // Send message to Minecraft
             String minecraftName = getMinecraftName(playerId);
             if (minecraftName != null) {
 
@@ -187,8 +186,7 @@ public class DiscordListener extends ListenerAdapter {
 
     public String getMinecraftName(String playerId) {
         Member member = getDiscordMemberFromUUID(playerId);
-        if (member != null) {
-            // Fetch Minecraft username from usercache.json
+        if (member == null) {
             return fetchMinecraftNameFromCache(playerId);
         }
         return member.getEffectiveName();
@@ -246,6 +244,7 @@ public class DiscordListener extends ListenerAdapter {
                 WebhookEmbedBuilder embedBuilder = new WebhookEmbedBuilder()
                         .setTitle(new WebhookEmbed.EmbedTitle(jdaEmbed.getTitle(), null))
                         .setDescription(jdaEmbed.getDescription())
+                        .setColor(jdaEmbed.getColorRaw())
                         .setFooter(new WebhookEmbed.EmbedFooter(jdaEmbed.getFooter().getText(), null));
 
                 jdaEmbed.getFields().forEach(field ->

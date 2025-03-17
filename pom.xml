@@ -5,7 +5,7 @@
 
     <groupId>com.garfield</groupId>
     <artifactId>chatintegration</artifactId>
-    <version>1.2.2</version>
+    <version>1.2.3</version>
 
     <name>Chat Integration Plugin</name>
     <description>A plugin to integrate Minecraft chat with Discord.</description>
